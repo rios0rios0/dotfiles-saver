@@ -12,24 +12,24 @@ $defaultWSL = wsl -l -v | Select-String -Pattern "\*" | ForEach-Object { $_.Line
 # Define the source and destination map with specific files
 $paths = @{
     "win" = @(
-        # folders group
+        # folders or recursive group
         ".aws\config",
         ".aws\credentials",
         ".azure\azureProfile.json",
         ".azure\service_principal_entries.json",
         ".gnupg",
         ".ssh",
+        "AppData\Local\Packages\Microsoft.WindowsTerminal_*\LocalState\settings.json",
         #"Development",
 
-        # files group
+        # direct files group
         ".gitconfig",
         ".gitignore",
         ".oh-my-posh.json",
         ".wakatime.cfg"
-        #"AppData\Local\Packages\Microsoft.WindowsTerminal_*\LocalState\settings.json"
     )
     "wsl" = @(
-        # folders group
+        # folders or recursive group
         ".docker\config.json",
         ".john",
         ".kube\config",
@@ -38,7 +38,7 @@ $paths = @{
         ".zsh_history_list",
         #"Development",
 
-        # files group
+        # direct files group
         ".autobump.yaml",
         ".bashrc",
         ".freterc",
@@ -51,6 +51,21 @@ $paths = @{
         ".zshrc",
         "pyvenv.cfg"
     )
+}
+
+function ResolveWildcardPath {
+    param (
+        [string]$path
+    )
+
+    if ($path -like '*[*]*') {
+        $resolvedPaths = Resolve-Path -Path $path
+        if ($resolvedPaths) {
+            return $resolvedPaths[0].Path
+        }
+    }
+
+    return $path
 }
 
 function CopyFiles {
@@ -91,8 +106,10 @@ function CopyFiles {
     }
 
     foreach ($item in $items) {
-        $sourcePath = "$source\$item"
-        $destinationPath = "$destination\$item"
+        $resolvedItem = ResolveWildcardPath -path "$source\$item"
+        $relativePath = $resolvedItem.Substring($source.Length)
+        $sourcePath = "$source\$relativePath"
+        $destinationPath = "$destination\$relativePath"
         CopyItemRecursively -sourcePath $sourcePath -destinationPath $destinationPath -operation $operation
     }
 }
