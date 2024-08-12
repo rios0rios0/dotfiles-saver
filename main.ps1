@@ -3,8 +3,8 @@ param (
 )
 
 # Get the current Windows user folder
-$currentUser = [System.Environment]::UserName
-$backupPath = "C:\Users\$currentUser\OneDrive\Backup"
+$user = [System.Environment]::UserName
+$backupPath = "C:\Users\$user\OneDrive\Backup"
 
 # Detect WSL distros and get the default one
 $defaultWSL = wsl -l -v | Select-String -Pattern "\*" | ForEach-Object { $_.Line.Split(" ")[1] }
@@ -20,7 +20,7 @@ $paths = @{
         ".gnupg",
         ".ssh",
         "AppData\Local\Packages\Microsoft.WindowsTerminal_*\LocalState\settings.json",
-        #"Development",
+        "Development",
 
         # direct files group
         ".gitconfig",
@@ -31,41 +31,24 @@ $paths = @{
     "wsl" = @(
         # folders or recursive group
         ".docker\config.json",
+        ".histdb",
         ".john",
         ".kube\config",
         ".kube\config-files",
         ".sqlmap",
-        ".zsh_history_list",
-        #"Development",
+        "Development",
 
         # direct files group
         ".autobump.yaml",
-        ".bashrc",
         ".freterc",
         ".gitconfig",
         ".gitignore",
         ".npmrc",
         ".npmrc.vizir",
         ".p10k.zsh",
-        ".zsh_history",
         ".zshrc",
-        "pyvenv.cfg"
+        "pyvenv.cfg" # TODO: do I really need to backup this file?
     )
-}
-
-function ResolveWildcardPath {
-    param (
-        [string]$path
-    )
-
-    if ($path -like '*[*]*') {
-        $resolvedPaths = Resolve-Path -Path $path
-        if ($resolvedPaths) {
-            return $resolvedPaths[0].Path
-        }
-    }
-
-    return $path
 }
 
 function CopyFiles {
@@ -114,23 +97,42 @@ function CopyFiles {
     }
 }
 
+function ResolveWildcardPath {
+    param (
+        [string]$path
+    )
+
+    if ($path -like '*[*]*') {
+        $resolvedPaths = Resolve-Path -Path $path
+        if ($resolvedPaths) {
+            return $resolvedPaths[0].Path
+        }
+    }
+
+    return $path
+}
+
 # Perform the requested operation
 switch ($operation) {
     "backup" {
         # Backup WIN files from root user folder in Windows
-        CopyFiles -source "C:\Users\$currentUser" -destination $backupPath\win -items $paths["win"] -operation "Backed up"
+        CopyFiles -source "C:\Users\$user" -destination $backupPath\win -items $paths["win"] -operation "Backed up"
 
         # Backup WSL files from default WSL path
-        CopyFiles -source "\\wsl.localhost\$defaultWSL\home\$currentUser" -destination $backupPath\wsl -items $paths["wsl"] -operation "Backed up"
+        CopyFiles -source "\\wsl.localhost\$defaultWSL\home\$user" -destination $backupPath\wsl -items $paths["wsl"] -operation "Backed up"
     }
     "restore" {
         # Restore WIN files to root user folder in Windows
-        CopyFiles -source $backupPath\win -destination "C:\Users\$currentUser" -items $paths["win"] -operation "Restored"
+        CopyFiles -source $backupPath\win -destination "C:\Users\$user" -items $paths["win"] -operation "Restored"
 
         # Restore WSL files to default WSL path
-        CopyFiles -source $backupPath\wsl -destination "\\wsl.localhost\$defaultWSL\home\$currentUser" -items $paths["wsl"] -operation "Restored"
+        CopyFiles -source $backupPath\wsl -destination "\\wsl.localhost\$defaultWSL\home\$user" -items $paths["wsl"] -operation "Restored"
     }
     default {
         Write-Output "Invalid operation. Use 'backup' or 'restore'."
     }
 }
+
+# TODO: change this script to avoid copying "node_modules", ".venv", ".terraform", ".terragrunt-cache" folders
+# download the dotfiles from the github.com/user/dotfiles repository, where user is the current user
+# inject 1Password credentials in the ones that are not public
