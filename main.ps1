@@ -20,7 +20,7 @@ $paths = @{
         ".gnupg",
         ".ssh",
         "AppData\Local\Packages\Microsoft.WindowsTerminal_*\LocalState\settings.json",
-        "Development",
+        #"Development",
 
         # direct files group
         ".gitconfig",
@@ -36,7 +36,7 @@ $paths = @{
         ".kube\config",
         ".kube\config-files",
         ".sqlmap",
-        "Development",
+        #"Development",
 
         # direct files group
         ".autobump.yaml",
