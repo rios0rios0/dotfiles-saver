@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	logger "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"io"
 	"os"
@@ -11,9 +12,11 @@ import (
 	"strings"
 )
 
+// Get the current Windows user folder
 var user = os.Getenv("USERNAME")
 var backupPath = fmt.Sprintf("C:\\Users\\%s\\OneDrive\\Backup", user)
 
+// Detect WSL distros and get the default one
 func getDefaultWSL() (string, error) {
 	cmd := exec.Command("wsl", "-l", "-v")
 	output, err := cmd.Output()
@@ -41,6 +44,7 @@ func getDefaultWSL() (string, error) {
 
 var defaultWSL, _ = getDefaultWSL()
 
+// Define the source and destination map with specific files
 var paths = map[string][]string{
 	"win": {
 		// folders or recursive group
@@ -51,7 +55,7 @@ var paths = map[string][]string{
 		".gnupg",
 		".ssh",
 		"AppData\\Local\\Packages\\Microsoft.WindowsTerminal_*\\LocalState\\settings.json",
-		// Development,
+		"Development",
 
 		// direct files group
 		".gitconfig",
@@ -67,7 +71,7 @@ var paths = map[string][]string{
 		".kube\\config",
 		".kube\\config-files",
 		".sqlmap",
-		// "Development",
+		"Development",
 
 		// direct files group
 		".autobump.yaml",
@@ -78,33 +82,42 @@ var paths = map[string][]string{
 		".npmrc.vizir",
 		".p10k.zsh",
 		".zshrc",
-		"pyvenv.cfg",
+		"pyvenv.cfg", // TODO: do I really need to backup this file?
 	},
 }
 
 var excludedFolders = []string{
+	".idea",
+	".terraform",
+	".terragrunt-cache",
 	".venv",
+	".vs",
+	"bin",
+	"desktop.ini",
+	"dist",
 	"node_modules",
+	"site-package",
+	"vendor",
 }
 
 func copyFile(sourcePath, destinationPath string) {
 	sourceFile, err := os.Open(sourcePath)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err)
 		return
 	}
 	defer sourceFile.Close()
 
 	destinationFile, err := os.Create(destinationPath)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err)
 		return
 	}
 	defer destinationFile.Close()
 
 	_, err = io.Copy(destinationFile, sourceFile)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err)
 	}
 }
 
@@ -119,50 +132,51 @@ func copyFiles(source, destination string, items []string, operation string) {
 }
 
 func copyItemRecursively(sourcePath, destinationPath, operation string) {
+	// Remove null characters from the source path (Illegal characters in path)
 	cleanSourcePath := strings.ReplaceAll(sourcePath, "\x00", "")
 	info, err := os.Stat(cleanSourcePath)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err)
 		return
 	}
 
 	if info.IsDir() {
 		if !shouldProcessDirectory(cleanSourcePath, excludedFolders) {
-			fmt.Printf("Skipping folder %s\n", cleanSourcePath)
+			logger.Warnf("Skipping folder %s", cleanSourcePath)
 			return
 		}
 
+		// Ensure the destination folder exists
 		if _, err := os.Stat(destinationPath); os.IsNotExist(err) {
-			os.MkdirAll(destinationPath, os.ModePerm)
+			_ = os.MkdirAll(destinationPath, os.ModePerm)
 		}
 		entries, err := os.ReadDir(cleanSourcePath)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err)
 			return
 		}
 		for _, entry := range entries {
 			copyItemRecursively(filepath.Join(cleanSourcePath, entry.Name()), filepath.Join(destinationPath, entry.Name()), operation)
 		}
-		fmt.Printf("%s folder %s to %s\n", operation, sourcePath, destinationPath)
+
+		logger.Infof("%s folder %s to %s", operation, cleanSourcePath, destinationPath)
 	} else {
+		// Ensure the parent folder exists in the destination
 		parentFolder := filepath.Dir(destinationPath)
 		if _, err := os.Stat(parentFolder); os.IsNotExist(err) {
-			os.MkdirAll(parentFolder, os.ModePerm)
+			_ = os.MkdirAll(parentFolder, os.ModePerm)
 		}
 		copyFile(cleanSourcePath, destinationPath)
-		fmt.Printf("%s file %s to %s\n", operation, sourcePath, destinationPath)
+
+		logger.Infof("%s file %s to %s", operation, cleanSourcePath, destinationPath)
 	}
 }
 
 func shouldProcessDirectory(directory string, excludedFolders []string) bool {
-	currentDir := directory
-	for currentDir != "" {
-		for _, excluded := range excludedFolders {
-			if filepath.Base(currentDir) == excluded {
-				return false
-			}
+	for _, excluded := range excludedFolders {
+		if filepath.Base(directory) == excluded {
+			return false
 		}
-		currentDir = filepath.Dir(currentDir)
 	}
 	return true
 }
@@ -175,14 +189,22 @@ func resolveWildcardPath(path string) string {
 	return matches[0]
 }
 
+// Perform the requested operation
 func main() {
-	var rootCmd = &cobra.Command{Use: "backup-restore"}
+	logger.SetLevel(logger.DebugLevel)
+
+	var rootCmd = &cobra.Command{
+		Use: "backup-restore",
+	}
 
 	var backupCmd = &cobra.Command{
 		Use:   "backup",
 		Short: "Backup files",
 		Run: func(cmd *cobra.Command, args []string) {
+			// Backup WIN files from root user folder in Windows
 			copyFiles(fmt.Sprintf("C:\\Users\\%s", user), filepath.Join(backupPath, "win"), paths["win"], "Backed up")
+
+			// Backup WSL files from default WSL path
 			copyFiles(fmt.Sprintf("\\\\wsl.localhost\\%s\\home\\%s", defaultWSL, user), filepath.Join(backupPath, "wsl"), paths["wsl"], "Backed up")
 		},
 	}
@@ -191,11 +213,17 @@ func main() {
 		Use:   "restore",
 		Short: "Restore files",
 		Run: func(cmd *cobra.Command, args []string) {
+			// Restore WIN files to root user folder in Windows
 			copyFiles(filepath.Join(backupPath, "win"), fmt.Sprintf("C:\\Users\\%s", user), paths["win"], "Restored")
+
+			// Restore WSL files to default WSL path
 			copyFiles(filepath.Join(backupPath, "wsl"), fmt.Sprintf("\\\\wsl.localhost\\%s\\home\\%s", defaultWSL, user), paths["wsl"], "Restored")
 		},
 	}
 
 	rootCmd.AddCommand(backupCmd, restoreCmd)
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 }
+
+// TODO: download the dotfiles from the github.com/user/dotfiles repository, where user is the current user
+// inject 1Password credentials in the ones that are not public

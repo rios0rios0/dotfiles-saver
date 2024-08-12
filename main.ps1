@@ -133,6 +133,5 @@ switch ($operation) {
     }
 }
 
-# TODO: change this script to avoid copying "node_modules", ".venv", ".terraform", ".terragrunt-cache" folders
-# download the dotfiles from the github.com/user/dotfiles repository, where user is the current user
+# TODO: download the dotfiles from the github.com/user/dotfiles repository, where user is the current user
 # inject 1Password credentials in the ones that are not public
