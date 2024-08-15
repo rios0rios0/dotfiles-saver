@@ -47,57 +47,34 @@ var defaultWSL, _ = getDefaultWSL()
 // Define the source and destination map with specific files
 var paths = map[string][]string{
 	"win": {
-		// folders or recursive group
-		".aws\\config",
-		".aws\\credentials",
-		".azure\\azureProfile.json",
-		".azure\\service_principal_entries.json",
-		".gnupg",
-		".ssh",
-		"AppData\\Local\\Packages\\Microsoft.WindowsTerminal_*\\LocalState\\settings.json",
 		"Development",
-
-		// direct files group
-		".gitconfig",
-		".gitignore",
-		".oh-my-posh.json",
-		".wakatime.cfg",
 	},
 	"wsl": {
-		// folders or recursive group
-		".docker\\config.json",
 		".histdb",
 		".john",
-		".kube\\config",
-		".kube\\config-files",
 		".sqlmap",
 		"Development",
-
-		// direct files group
-		".autobump.yaml",
-		".freterc",
-		".gitconfig",
-		".gitignore",
-		".npmrc",
-		".npmrc.vizir",
-		".p10k.zsh",
-		".zshrc",
-		"pyvenv.cfg", // TODO: do I really need to backup this file?
 	},
 }
 
+// TODO: it could be more smarter to detect ".gitignore" files and exclude their content from the backup
 var excludedFolders = []string{
+	".gradle", // Gradle cache
 	".idea",
+	".opensearch",   // OpenSearch cache and snapshots data
+	".pytest_cache", // Python test cache
 	".terraform",
 	".terragrunt-cache",
-	".venv",
+	".tox",  // Python test environment
+	".venv", // Python virtual environment
 	".vs",
-	"bin",
+	"bin", // Go build folder
 	"desktop.ini",
-	"dist",
-	"node_modules",
-	"site-package",
-	"vendor",
+	"dist",         // Node.js build folder
+	"node_modules", // Node.js packages
+	"packages",     // .NET packages
+	"site-package", // Python packages
+	"vendor",       // PHP packages
 }
 
 func copyFile(sourcePath, destinationPath string) {
@@ -224,6 +201,3 @@ func main() {
 	rootCmd.AddCommand(backupCmd, restoreCmd)
 	_ = rootCmd.Execute()
 }
-
-// TODO: download the dotfiles from the github.com/user/dotfiles repository, where user is the current user
-// inject 1Password credentials in the ones that are not public
